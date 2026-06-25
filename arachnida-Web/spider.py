@@ -1,11 +1,13 @@
 import os
 import sys
 import requests
+from termcolor import colored
 from bs4 import BeautifulSoup as BS
 from urllib.parse import urljoin
 from urllib.parse import urlparse
 
-count_depth = -1
+visited = set()
+base_domain = ""
 options = {
 
     "recursive": False,
@@ -13,72 +15,97 @@ options = {
     "path": "./data/"
 
 }
+MAX_IMAGES_PER_LINK = 5
+MAX_LINKS = 5
 
-
-def get_html_from_url( url, headers ):
+def get_html_from_url( url, headers, count_depth ):
 
     try:
         response = requests.get( url, headers=headers )
+        print( f"Code: {response.status_code}\n")
         if ( response.status_code == 403 ):
-            print( f"Error 403: the website does not allow this request " )
-            sys.exit(1)
+            return None
         elif ( response.status_code != 200 ):
-            print( f"Error {response.status_code}" )
-            sys.exit(1)
-        print( f"Code: {response.status_code}\n")#content: {response.text}" )
+            return None
     
     except requests.exceptions.RequestException:
         print( f"Error: invalid URL or inaccesible site [{url}]" )
-        sys.exit(1)
+        return None
+
     
     return response.text
 
 
-def download_img_from_url( url, headers ):
+def download_img_from_url( url, headers, count_depth ):
 
-    global count_depth
-    global options    
+    global visited, options, base_domain
 
-    count_depth += 1
-    if count_depth > options["depth"]:
+    if url in visited:
         return
+    visited.add( url )
+    
+    if count_depth != 0:
+        print( f"Found a valid link" )
+    
+  
 
-    html = get_html_from_url(  url, headers )
-    print( f"Depth: {count_depth}" )
+    if count_depth == 0:
+        base_domain = urlparse( url ).netloc
+
+    print( f"\033[35mdepth is\033[0m {count_depth} \033[35msite is\033[0m {url}" )
+    
+    html = get_html_from_url(  url, headers, count_depth )
+    if html == None:
+        return 
 
     soup = BS( html, "html.parser" )
+    print( f"\033[32mLooking for img tags on the site ...\033[0m" )
+    count_images = 0
     img_tags = soup.find_all( 'img' )
     for img in img_tags:
         img_url = img.get( 'src' )
+        if not img_url:
+            continue
+        
         allowed_extension = ( ".jpg", ".jpeg", ".png", "gif", ".bmp" )
         if not img_url.lower().endswith( allowed_extension ):
             continue
+        
         if img_url:
             full_url = urljoin( url, img_url )
             img_name = img_url.split( '/' )[ -1 ]
-            img_response = requests.get( full_url, headers=headers )
+            img_response = requests.get( full_url, headers=headers )            
             
-            dir_path = "./data/" + str( count_depth ) + "/"
-            os.makedirs( dir_path, exist_ok=True )
-            path = dir_path + img_name
-            #print( f"Downloading from {url} to {dir_path}..." )
-            
+            path = options[ "path" ] + img_name
+            if count_images >= MAX_IMAGES_PER_LINK:
+                break
+            count_images += 1
             try:
                 with open( path, "wb" ) as f:
+                    print( f"\033[32mDownloading an image from the site ...\033[0m" )
                     f.write( img_response.content )
+
             except OSError as e:
                 print( f"Error: invalid option -p, requires a valid path: {e}" )
-                return 1
-    
+                sys.exit(1)
+    if options[ "recursive" ] == False:
+        return
+    if count_depth >= options["depth"]:
+        return
+    print( f"Start to getting links from the site {url}" )
+    count_links = 0
     if options[ "recursive" ] == True:
-        #more than 1 time
         links = soup.find_all( 'a' )
         for link in links:
             href = link.get('href')
-            if href and urlparse( href ).scheme in ( 'http', 'https' ) and href != url:
-                download_img_from_url( href, headers )
-
-
+            if href and urlparse( href ).scheme in ( 'http', 'https' ) and href != url and urlparse( href ).netloc == base_domain:
+                count_links += 1
+                if count_links >= MAX_LINKS:
+                    break
+                download_img_from_url( href, headers, count_depth + 1 )
+    
+    print( f"No more links for depth {count_depth}" )
+    
 
 def set_headers():
     
@@ -101,12 +128,12 @@ def fill_options( args ):
         if arg == "-r":
             options[ "recursive" ] = True
         elif arg == "-l":
-            if i + 1 >= len( args ) or not args[i + 1].isdigit() or int(args[i + 1]) > 100:
-                print( f"Error: invalid option -l, requires a valid depth (0-100)" )
+            if i + 1 >= len( args ) or not args[i + 1].isdigit() or int(args[i + 1]) < 1 or int(args[i + 1]) > 10:
+                print( f"Error: invalid option -l, requires a valid depth (1-10)" )
                 sys.exit(1)
             options[ "depth" ] = int(args[i + 1])
         elif arg == "-p":
-            if i + 1 >= len( args ):
+            if i + 1 >= len( args ) or args[i + 1][-1] != '/':
                 print( f"Error: invalid option -p, requires a valid path" )
                 sys.exit(1)
             options["path"] = args[i + 1]
@@ -134,11 +161,12 @@ def get_args( argv ):
 def main():
     args = get_args( sys.argv )
 
+    global options
     fill_options( args )
     headers = set_headers()
-    os.makedirs( "./data/", exist_ok=True )
+    os.makedirs( options[ "path" ], exist_ok=True )
 
-    download_img_from_url( args[-1], headers )
+    download_img_from_url( args[-1], headers, 0 )
 
 
 if __name__=="__main__":
