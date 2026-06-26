@@ -10,7 +10,7 @@ MAGENTA= "\033[35m"
 RESET = "\033[0m"
 
 
-def print_basic_inf_about_image( image ):
+def print_properties( image ):
     exif_dictionary = {
         "Filename": image.filename,
         "Image Size": image.size,
@@ -22,7 +22,9 @@ def print_basic_inf_about_image( image ):
         "Frames in Image": getattr(image, "n_frames", 1)
     }
 
-    print_dict( exif_dictionary )
+    print( f"{UNDERLINE}Image properties:{RESET}" )
+    for label,value in exif_dictionary.items():
+        print( f"{label:25}: {value}" )
 
 
 def get_args():
@@ -80,30 +82,30 @@ def print_gps_exif( exif_data ):
         location = ( latitude, longitude )
         print( f"{'Location':25}: {location}" )
 
+def print_exif( arg ):
 
-def print_dict( exif_dictionary ):
+    image = Image.open( arg )   
+    print_properties( image )
     
-    for label,value in exif_dictionary.items():
-        print( f"{label:25}: {value}" )
+    exif_data = image.getexif()
+    if exif_data:
+        print( f"{UNDERLINE}EXIF:{RESET}" )
+        print_general_exif( exif_data )
+        print_gps_exif( exif_data )
+    else:
+        print( f"{UNDERLINE}No EXIF data found{RESET}" )
+        
+    print( "\n" )
 
 
 def main():
     args  = get_args()
     
     for i, arg in enumerate( args ):
-
         print( f"{BOLD}{UNDERLINE}{YELLOW}Image {i + 1}{RESET}" )
-        image = Image.open( arg )   
-        print_basic_inf_about_image( image )
+        print_exif( arg )
         
-        exif_data = image.getexif()
-        if exif_data:
-            print_general_exif( exif_data )
-            print_gps_exif( exif_data )
-            
-        print( "\n" )
-        
-    
+
 
 if __name__=="__main__":
     main()

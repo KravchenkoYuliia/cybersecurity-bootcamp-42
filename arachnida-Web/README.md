@@ -29,5 +29,18 @@ The Exchangeable Image File Format (EXIF) is a standard that specifies how metad
 
 usage:
 ```
-./scorpion.py FILE1 [FILE2 ...]
+python3 scorpion.py image_name1 image_name2 ... 
 ```
+
+## Bonus part
+
+Add options to modify or delete EXIF information
+-m to modify
+-d to delete
+
+usage
+```
+python3 scorpion.py image_name -m "Model" "iPhone 14"
+python3 scorpion.py image_name -d "Model"
+```
+- double quotes are mandatory for key and value after the option
