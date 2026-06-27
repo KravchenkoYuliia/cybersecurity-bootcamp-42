@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+
+import re
+import sys
+import argparse
+from cryptography.fernet import Fernet
+
+
+def fatal_error( msg ):
+    
+    print( f"Error: {msg}" )
+    sys.exit(1)
+
+
+def get_text_from_file( file ):
+    
+    try:
+        return open( file ).read()
+    except Exception as e:
+        fatal_error( f"can't read the file. {e}" )
+
+
+def put_text_to_file( text ):
+
+    try:
+        with open( "ft_otp.key", "w" ) as file:
+            file.write( text )
+    except Exception as e:
+        fatal_error( f"can't write in file. {e}" )
+
+
+def check_key_is_valid( key ):
+    
+    if re.fullmatch( r"[0-9a-fA-F]+", key ) == None or len( key ) < 64:
+        fatal_error( "initial key must be at least 64 hexadecimal characters" )
+
+
+def encrypt_text( text ):
+
+    fernet_key = Fernet.generate_key()
+    fernet_object = Fernet( fernet_key )
+    
+    return fernet_object.encrypt( text.encode() )
+
+
+def store_initial_key( file ):
+    
+    key = get_text_from_file( file )
+    check_key_is_valid( key )
+    encrypted_key = encrypt_text( key )
+    put_text_to_file( encrypted_key.decode() )
+
+
+def generate_temp_key ( initial_key ):
+    print( initial_key )
+
+
+def parse_args():
+
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group( required=True )
+    group.add_argument( '-g', nargs=1, help="python3 ft_otp.py -g key.txt" )
+    group.add_argument( '-k', nargs=1, help="python3 ft_otp.py -k ft_otp.key" )
+
+    return parser.parse_args()
+
+
+def main():
+    
+    try:
+        args = parse_args()
+        if args.g != None:
+            store_initial_key( args.g[0] )
+        elif args.k != None:
+            generate_temp_key( args.k[0] )
+    except Exception as e:
+        fatal_error( f"{e}" )
+
+
+if __name__=="__main__":
+    main()
