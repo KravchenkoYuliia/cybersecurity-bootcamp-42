@@ -1,7 +1,6 @@
 import os
 import sys
 import requests
-from termcolor import colored
 from bs4 import BeautifulSoup as BS
 from urllib.parse import urljoin
 from urllib.parse import urlparse
@@ -133,7 +132,7 @@ def fill_options( args ):
                 sys.exit(1)
             options[ "depth" ] = int(args[i + 1])
         elif arg == "-p":
-            if i + 1 >= len( args ) or args[i + 1][-1] != '/':
+            if i + 1 >= len( args ) or len(args[i + 1]) == 0 or args[i + 1][-1] != '/':
                 print( f"Error: invalid option -p, requires a valid path" )
                 sys.exit(1)
             options["path"] = args[i + 1]
