@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 
+import os
 import re
 import sys
+import hmac
+import hashlib
 import argparse
 from cryptography.fernet import Fernet
+import traceback
+from dotenv import load_dotenv
 
+load_dotenv()
+fernet_key = os.getenv( "FERNET_KEY")
+
+PASSWORD_LENGTH = 6
 
 def fatal_error( msg ):
     
@@ -15,7 +24,7 @@ def fatal_error( msg ):
 def get_text_from_file( file ):
     
     try:
-        return open( file ).read()
+        return open( file ).read().strip()
     except Exception as e:
         fatal_error( f"can't read the file. {e}" )
 
@@ -29,30 +38,49 @@ def put_text_to_file( text ):
         fatal_error( f"can't write in file. {e}" )
 
 
-def check_key_is_valid( key ):
+def check_initial_password_is_valid( initial_password ):
     
-    if re.fullmatch( r"[0-9a-fA-F]+", key ) == None or len( key ) < 64:
-        fatal_error( "initial key must be at least 64 hexadecimal characters" )
+    if re.fullmatch( r"[0-9a-fA-F]+", initial_password ) == None or len( initial_password ) < 64:
+        fatal_error( "initial password must be at least 64 hexadecimal characters" )
 
 
 def encrypt_text( text ):
 
-    fernet_key = Fernet.generate_key()
-    fernet_object = Fernet( fernet_key )
-    
+    fernet_object = Fernet( fernet_key.encode() )
     return fernet_object.encrypt( text.encode() )
 
 
-def store_initial_key( file ):
+def decrypt_text( text ):
+
+    fernet_object = Fernet( fernet_key.encode() )
+    return fernet_object.decrypt( text.encode() ).decode()
+
+
+def store_initial_password( file ):
     
-    key = get_text_from_file( file )
-    check_key_is_valid( key )
-    encrypted_key = encrypt_text( key )
-    put_text_to_file( encrypted_key.decode() )
+    initial_password = get_text_from_file( file )
+    check_initial_password_is_valid( initial_password )
+    encrypted_initial_password = encrypt_text( initial_password )
+    put_text_to_file( encrypted_initial_password.decode() )
 
 
-def generate_temp_key ( initial_key ):
-    print( initial_key )
+def generate_totp ( file ):
+    
+    counter = 1
+    
+    encrypted_initial_password = get_text_from_file( file )
+    initial_password = decrypt_text( encrypted_initial_password )
+    key_bytes = bytes.fromhex( initial_password )
+    counter_in_bytes = counter.to_bytes( 8, byteorder = 'big' )
+    hmac_hash = hmac.new( key_bytes, counter_in_bytes, hashlib.sha1 ).digest()
+    offset = hmac_hash[-1] & 0x0F #00001111 take the last byte
+    print( f"offset is {offset}" )
+    # take 4 bits of last byte starting from offset
+    truncated_4bytes = hmac_hash[ offset : offset+4 ]
+    number_from_bytes = int.from_bytes( truncated_4bytes, byteorder = 'big' ) & 0x7FFFFFFF
+    hotp_code = number_from_bytes % ( 10 ** PASSWORD_LENGTH )
+    hotp_str = str( hotp_code ).zfill( PASSWORD_LENGTH )
+    print( hotp_str )
 
 
 def parse_args():
@@ -70,11 +98,13 @@ def main():
     try:
         args = parse_args()
         if args.g != None:
-            store_initial_key( args.g[0] )
+            store_initial_password( args.g[0] )
         elif args.k != None:
-            generate_temp_key( args.k[0] )
+            generate_totp( args.k[0] )
     except Exception as e:
-        fatal_error( f"{e}" )
+        traceback.print_exc()
+        sys.exit(1)
+        #fatal_error( f"{e}" )
 
 
 if __name__=="__main__":
